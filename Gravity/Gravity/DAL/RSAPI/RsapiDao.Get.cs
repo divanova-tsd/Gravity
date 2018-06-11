@@ -24,7 +24,9 @@ namespace Gravity.DAL.RSAPI
 
 		protected List<RDO> GetRdos(int[] artifactIds)
 		{
-			return rsapiProvider.Read(artifactIds).GetResultData();
+			return artifactIds.Any()
+				? rsapiProvider.Read(artifactIds).GetResultData()
+				: new List<RDO>();
 		}
 
 		protected IEnumerable<RDO> GetRdos<T>(Condition queryCondition = null)
@@ -34,8 +36,8 @@ namespace Gravity.DAL.RSAPI
 			{
 				ArtifactTypeGuid = BaseDto.GetObjectTypeGuid<T>(),
 				Condition = queryCondition,
-				Fields = FieldValue.AllFields
-			};
+				Fields = BaseDto.GetFieldsGuids<T>().Select(x => new FieldValue(x)).ToList()
+		};
 
 			return rsapiProvider.Query(query).SelectMany(x => x.GetResultData());
 		}
@@ -62,9 +64,13 @@ namespace Gravity.DAL.RSAPI
 			return objectsRdos.Select(rdo => GetHydratedDTO<T>(rdo, depthLevel));
 		}
 
-		public IEnumerable<T> GetAllChildDTOs<T>(Guid parentFieldGuid, int parentArtifactID, ObjectFieldsDepthLevel depthLevel)
+		public IEnumerable<T> GetAllChildDTOs<T>(int parentArtifactID, ObjectFieldsDepthLevel depthLevel)
 			where T : BaseDto, new()
 		{
+			var parentFieldGuid = typeof(T)
+				.GetPropertyAttributeTuples<RelativityObjectFieldParentArtifactIdAttribute>()
+				.First().Item2.FieldGuid;
+
 			Condition queryCondition = new WholeNumberCondition(parentFieldGuid, NumericConditionEnum.EqualTo, parentArtifactID);
 			return GetAllDTOs<T>(queryCondition, depthLevel);
 		}
@@ -88,7 +94,7 @@ namespace Gravity.DAL.RSAPI
 			where T : BaseDto, new()
 		{
 			T dto = objectRdo.ToHydratedDto<T>();
-
+			PopulateChoices(dto, objectRdo);
 			switch (depthLevel)
 			{
 				case ObjectFieldsDepthLevel.OnlyParentObject:
@@ -106,6 +112,43 @@ namespace Gravity.DAL.RSAPI
 			return dto;
 		}
 
+		private void PopulateChoices(BaseDto dto, RDO objectRdo)
+		{
+			foreach ((PropertyInfo property, RelativityObjectFieldAttribute fieldAttribute) 
+				in dto.GetType().GetPropertyAttributeTuples<RelativityObjectFieldAttribute>())
+			{
+				object GetEnum(Type enumType, int artifactId) => choiceCache.InvokeGenericMethod(enumType, nameof(ChoiceCache.GetEnum), artifactId);
+
+				switch (fieldAttribute.FieldType)
+				{
+					case RdoFieldType.SingleChoice:
+						{ 
+							if (objectRdo[fieldAttribute.FieldGuid].ValueAsSingleChoice?.ArtifactID is int artifactId)
+							{
+								var enumType = Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType;
+								property.SetValue(dto, GetEnum(enumType, artifactId));
+							}
+						}
+						break;
+					case RdoFieldType.MultipleChoice:
+						{ 
+							var enumType = property.PropertyType.GetEnumerableInnerType();
+							var fieldValue = objectRdo[fieldAttribute.FieldGuid].ValueAsMultipleChoice?
+								.Select(x => GetEnum(enumType, x.ArtifactID))
+								.ToList();
+							if (fieldValue != null)
+							{ 
+								property.SetValue(dto, MakeGenericList(fieldValue, enumType));
+							}
+						}
+						break;
+					default:
+						break;
+				}
+			}
+		}
+
+
 		internal void PopulateChildrenRecursively<T>(BaseDto baseDto, RDO objectRdo, ObjectFieldsDepthLevel depthLevel)
 		{
 			foreach (var objectPropertyInfo in baseDto.GetType().GetPublicProperties())
@@ -120,49 +163,57 @@ namespace Gravity.DAL.RSAPI
 
 		private object GetChildObjectRecursively(BaseDto baseDto, RDO objectRdo, ObjectFieldsDepthLevel depthLevel, PropertyInfo property)
 		{
-			//multiple object
-			var multiObjectAttribute = property.GetCustomAttribute<RelativityMultipleObjectAttribute>();
-			if (multiObjectAttribute != null)
+			var relativityObjectFieldAttibutes = property.GetCustomAttribute<RelativityObjectFieldAttribute>();
+
+			if (relativityObjectFieldAttibutes != null)
 			{
-				Type objectType = property.PropertyType.GetEnumerableInnerType();
+				var fieldType = relativityObjectFieldAttibutes.FieldType;
+				var fieldGuid = relativityObjectFieldAttibutes.FieldGuid;
 
-				int[] childArtifactIds = objectRdo[multiObjectAttribute.FieldGuid]
-					.GetValueAsMultipleObject<kCura.Relativity.Client.DTOs.Artifact>()
-					.Select(artifact => artifact.ArtifactID)
-					.ToArray();
+				//multiple object
+				if (fieldType == RdoFieldType.MultipleObject)
+				{
+					Type objectType = property.PropertyType.GetEnumerableInnerType();
 
-				var allObjects = this.InvokeGenericMethod(objectType, nameof(GetDTOs), childArtifactIds, depthLevel) as IEnumerable;
+					int[] childArtifactIds = objectRdo[fieldGuid]
+						.GetValueAsMultipleObject<kCura.Relativity.Client.DTOs.Artifact>()
+						.Select(artifact => artifact.ArtifactID)
+						.ToArray();
 
-				return MakeGenericList(allObjects, objectType);
-			}
+					var allObjects = this.InvokeGenericMethod(objectType, nameof(GetDTOs), childArtifactIds, depthLevel) as IEnumerable;
 
-			//single object
-				var fieldType = property.GetCustomAttribute<RelativityObjectFieldAttribute>()?.FieldType;
-						var fieldGuid = property.GetCustomAttribute<RelativityObjectFieldAttribute>()?.FieldGuid;
+					return MakeGenericList(allObjects, objectType);
+				}
 
-						if (fieldType == RdoFieldType.SingleObject && fieldGuid != null)
-			{
-				var objectType = property.PropertyType;
-				int childArtifactId = objectRdo[(Guid)fieldGuid].ValueAsSingleObject.ArtifactID;
-				return childArtifactId == 0
-					? Activator.CreateInstance(objectType)
-					: this.InvokeGenericMethod(objectType, nameof(GetRelativityObject), childArtifactId, depthLevel);
+				//single object
+				if (fieldType == RdoFieldType.SingleObject)
+				{
+					var childArtifact = objectRdo[fieldGuid].ValueAsSingleObject;
+					if (childArtifact == null)
+					{
+						return null;
+					}
+
+					var objectType = property.PropertyType;
+					var childArtifactId = childArtifact.ArtifactID;
+					return childArtifactId == 0
+						? Activator.CreateInstance(objectType)
+						: this.InvokeGenericMethod(objectType, nameof(GetRelativityObject), childArtifactId, depthLevel);
+				}
 			}
 
 			//child object
 			if (property.GetCustomAttribute<RelativityObjectChildrenListAttribute>() != null)
 			{
 				var childType = property.PropertyType.GetEnumerableInnerType();
-				Guid parentFieldGuid = childType.GetRelativityObjectGuidForParentField();
 
-				var allChildObjects = this.InvokeGenericMethod(childType, nameof(GetAllChildDTOs), parentFieldGuid, baseDto.ArtifactId, depthLevel) as IEnumerable;
+				var allChildObjects = this.InvokeGenericMethod(childType, nameof(GetAllChildDTOs), baseDto.ArtifactId, depthLevel) as IEnumerable;
 
 				return MakeGenericList(allChildObjects, childType);
 			}
 
 			//file
-			var relativityFile = property.GetValue(baseDto, null) as RelativityFile;
-			if (relativityFile != null)
+			if (property.GetValue(baseDto, null) is RelativityFile relativityFile)
 			{
 				return GetFile(relativityFile.ArtifactTypeId, baseDto.ArtifactId);
 			}
@@ -173,7 +224,11 @@ namespace Gravity.DAL.RSAPI
 		private static IList MakeGenericList(IEnumerable items, Type type)
 		{
 			var listType = typeof(List<>).MakeGenericType(type);
-			IList returnList = (IList)Activator.CreateInstance(listType, items);
+			IList returnList = (IList)Activator.CreateInstance(listType);
+			foreach (var item in items)
+			{
+				returnList.Add(item);
+			}
 			return returnList;
 		}
 	}

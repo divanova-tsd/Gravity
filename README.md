@@ -1,13 +1,26 @@
-# Gravity
-CRUDQ Framework for Relativity Custom Development
+![Gravity](https://raw.githubusercontent.com/relativitydev/Gravity/development/images/Gravity.png) 
+
+Open Source Community: **Gravity** is an [ORM framework](https://en.wikipedia.org/wiki/Object-relational_mapping) for Relativity custom development.  Using Gravity will greatly decrease the amount of time it takes to pick up Relativity development and allow you to write code that interacts with Relativity with commonly used C# syntax.
+
+While this project is hosted on the RelativityDev account, support is only available through the Relativity developer community. You are welcome to use the code and solution as you see fit within the confines of the license it is released under. However, if you are looking for support or modifications to the solution, we suggest reaching out to a Relativity Development Partner.
+
+Gravity was originally created by TSD Services.   Through their generosity and leadership, they have released the project as open source.  It is an active project and has contributions from other Relativity Development Partners.  Anyone who has a need is invited to use and contribute to the project.
+
+We would like to recognize the following Relativity Development Partners who have made significant contributions to the Gravity project:
+
+<p align="center>
+	<img src="http://www.tsdservices.com/wp-content/uploads/2015/03/TSD_Logo-TM-for-website.png">  
+</p>
+
+![TSD Services](http://www.tsdservices.com/wp-content/uploads/2015/03/TSD_Logo-TM-for-website.png "TSD Services")  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ![MILYLI](http://milyli.com/wp-content/uploads/2014/07/milyli_header-regular.png "MILYLI")
 
 This is also available as a [nuget package](https://www.nuget.org/packages/Gravity/).
 
-## Target Framework
-* .NET 4.5.1
+## Target Frameworks
+* .NET 4.5.1, .NET 4.6.2
 
 ## Dependencies
-This project requires references to Relativity's Relativity® SDK dlls, which are referenced via Nuget packages. Only DLL versions 9.4.224.2 to 9.5.162.111 are supported at the moment, but these should generally work with earlier or later versions of a Relativity server without any problems.
+This project requires references to Relativity's Relativity® SDK dlls, which are referenced via Nuget packages. As such, DLL versions 9.4.224.2 and up are supported.
 
 ## Sample / Test Suite
 
@@ -18,10 +31,6 @@ Before using the CRUD/Q methods in Gravity you will have to create a model and d
 
 * `RelativityObject` - Specifies the type Guid of the RDO you are targeting.
 * `RelativityObjectField` - Specifies the type Guid and the "RdoFieldType" of the RDO field you are targeting.
-* `RelativityMultipleObject` - Specifies the type Guid of a multiple object RDO field.
-     * **Note:** This attribute is used if you want to return the field as a List of objects (not just ids).
-* `RelativitySingleObject` - Specifies the type Guid of a single object RDO field.
-    * **Note:** This attribute is used if you want to return the field as a objects (not just id).
 * `RelativityObjectChildrenList` - Used to decorate a List of child RDOs as a object List.
 
 The following example demonstrates a RDO represented as a Model:
@@ -42,19 +51,16 @@ public class DemoPurchaseOrder : BaseDto
 	[RelativityObjectField("3BDC0971-A87C-414E-9A37-FC477279BBAD", RdoFieldType.FixedLengthText, 100)]
 	public string CustomerEmail { get; set; }
 
-	[RelativityObjectField("D0770889-8A4D-436A-9647-33419B96E37E", RdoFieldType.MultipleObject, typeof(Items))]
-	public IList<int> ItemIds { get; set; }
+	[RelativityObjectField("D0770889-8A4D-436A-9647-33419B96E37E"), RdoFieldType.MultipleObject)]
+	public IList<Items> Items { get; set; }
 
-	[RelativityMultipleObject("D0770889-8A4D-436A-9647-33419B96E37E")]
-	public List<Items> Items { get; set; }
-
-	[RelativitySingleObject("D0770889-8A4D-436A-9647-33419B96E37E")]
+	[RelativityObjectField("D0770889-8A4D-436A-9647-33419B96E37E"), RdoFieldType.SingleObject)]
 	public Address Address { get; set; }
 
 	[RelativityObjectField("4501A308-5E68-4314-AEDC-4DEB527F12A8", RdoFieldType.Decimal)]
 	public decimal Total { get; set; }
 
-	[RelativityObjectField("CEDB347B-679D-44ED-93D3-0B3027C7E6F5", RdoFieldType.SingleChoice, typeof(OrderType))]
+	[RelativityObjectField("CEDB347B-679D-44ED-93D3-0B3027C7E6F5", RdoFieldType.SingleChoice)]
 	public OrderType OrderType { get; set; }
 
 	[RelativityObjectChildrenList]
