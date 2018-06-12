@@ -9,19 +9,19 @@ namespace Gravity.Base
 		public RelativityFile()
 		{ }
 
-		public RelativityFile(int artifactTypeID)
+		public RelativityFile(int fieldId)
 		{
-			this.ArtifactTypeId = artifactTypeID;
+			this.FieldId = fieldId;
 		}
 
-		public RelativityFile(int artifactTypeID, FileValue fieldValue, FileMetadata fileMetadata )
+		public RelativityFile(int fieldId, FileValue fieldValue, FileMetadata fileMetadata )
 		{
-			this.ArtifactTypeId = artifactTypeID;
+			this.FieldId = fieldId;
 			this.FileMetadata = fileMetadata;
 			this.FileValue = fieldValue;
 		}
 
-		public int ArtifactTypeId { get; set; }
+		public int FieldId { get; set; }
 
 		public FileValue FileValue { get; set; }
 

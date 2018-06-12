@@ -60,7 +60,7 @@ namespace Gravity.Test.Unit
 			var dto = GetRdoWithField(propertyGuid, fieldValue);
 
 			var expectedValue = fileName == null ? (int?)null : fieldId;
-			Assert.AreEqual(expectedValue, dto.FileField?.ArtifactTypeId);
+			Assert.AreEqual(expectedValue, dto.FileField?.FieldId);
 		}
 
 		public static GravityLevelOne GetRdoWithField(Guid propertyGuid, FieldValue fieldValue)

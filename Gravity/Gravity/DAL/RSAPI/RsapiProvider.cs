@@ -77,7 +77,7 @@ namespace Gravity.DAL.RSAPI
 					Overwrite = true,
 					Target =
 					{
-						FieldId = relativityFile.ArtifactTypeId,
+						FieldId = relativityFile.FieldId,
 						ObjectArtifactId = parentId
 					}
 				};

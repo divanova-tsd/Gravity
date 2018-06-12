@@ -1,4 +1,5 @@
-﻿using Gravity.DAL.RSAPI;
+﻿using Gravity.Base;
+using Gravity.DAL.RSAPI;
 using Gravity.DAL.RSAPI.Tests;
 using Gravity.Test.Helpers;
 using Gravity.Test.TestClasses;
@@ -7,8 +8,12 @@ using Moq;
 using NUnit.Framework;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Text;
+using DownloadResponse = kCura.Relativity.Client.DownloadResponse;
+using FileMetadata = kCura.Relativity.Client.FileMetadata;
 
 namespace Gravity.Test.Unit
 {
@@ -20,7 +25,7 @@ namespace Gravity.Test.Unit
 		public void GetHydratedDTO_BlankRDO()
 		{
 			var dao = new RsapiDao(GetChoiceRsapiProvider(null, null));
-			var dto = dao.GetRelativityObject<GravityLevelOne>(RootArtifactID, Base.ObjectFieldsDepthLevel.FirstLevelOnly);
+			var dto = dao.GetRelativityObject<GravityLevelOne>(RootArtifactID, Base.ObjectFieldsDepthLevel.OnlyParentObject);
 			Assert.AreEqual(RootArtifactID, dto.ArtifactId);
 		}
 
@@ -49,18 +54,65 @@ namespace Gravity.Test.Unit
 		}
 
 		[Test]
-		[Ignore("TODO: Implement")]
 		public void GetHydratedDTO_DownloadsFileContents()
 		{
-			//if possible, test whether Hydrated DTO can download properly
-			throw new NotImplementedException();
+			const int FieldId = 2;
+
+			var rdo = TestObjectHelper.GetStubRDO<GravityLevelOne>(RootArtifactID);
+			var fileGuid = GetFieldGuid<GravityLevelOne>(nameof(GravityLevelOne.FileField));
+			var fileField = rdo.Fields.Single(x => x.Guids.Contains(fileGuid));
+			rdo[fileGuid].ArtifactID = FieldId;
+			rdo[fileGuid].ValueAsFixedLengthText = "SimilarToFileName";
+
+			var providerMock = new Mock<IRsapiProvider>(MockBehavior.Strict);
+			providerMock.Setup(x => x.Query(It.IsAny<Query<RDO>>())).Returns(new[] { new RDO[0].ToSuccessResultSet<QueryResultSet<RDO>>() });
+
+			providerMock.Setup(x => x.ReadSingle(RootArtifactID)).Returns(rdo);
+			providerMock.Setup(x => x.DownloadFile(FieldId, RootArtifactID)).Returns(
+				new KeyValuePair<DownloadResponse, Stream>(
+					new DownloadResponse { Metadata = new FileMetadata { FileName = "FileName" } },
+					new MemoryStream(Encoding.UTF8.GetBytes("Test Message"))
+				));
+
+
+			var rsapiProvider = new RsapiDao(providerMock.Object);
+			var dto = rsapiProvider.GetRelativityObject<GravityLevelOne>(RootArtifactID, ObjectFieldsDepthLevel.FirstLevelOnly);
+
+			var file = dto.FileField;
+
+			Assert.AreEqual("FileName", file.FileMetadata.FileName);
+			Assert.AreEqual("Test Message", Encoding.UTF8.GetString(file.FileValue.Data));
+		}
+
+		[Test]
+		public void GetHydratedDTO_DoesNotDownloadFileContentsWithoutRecursion()
+		{
+			const int FieldId = 2;
+
+			var rdo = TestObjectHelper.GetStubRDO<GravityLevelOne>(RootArtifactID);
+			var fileGuid = GetFieldGuid<GravityLevelOne>(nameof(GravityLevelOne.FileField));
+			var fileField = rdo.Fields.Single(x => x.Guids.Contains(fileGuid));
+			rdo[fileGuid].ArtifactID = FieldId;
+			rdo[fileGuid].ValueAsFixedLengthText = "SimilarToFileName";
+
+			var providerMock = new Mock<IRsapiProvider>(MockBehavior.Strict);
+			providerMock.Setup(x => x.Query(It.IsAny<Query<RDO>>())).Returns(new[] { new RDO[0].ToSuccessResultSet<QueryResultSet<RDO>>() });
+
+			providerMock.Setup(x => x.ReadSingle(RootArtifactID)).Returns(rdo);
+			
+			var rsapiProvider = new RsapiDao(providerMock.Object);
+			var dto = rsapiProvider.GetRelativityObject<GravityLevelOne>(RootArtifactID, ObjectFieldsDepthLevel.OnlyParentObject);
+
+			// TODO: Is this really what we want? Maybe whole field should be null. See #102
+			Assert.Null(dto.FileField.FileValue);
+			Assert.Null(dto.FileField.FileMetadata);
 		}
 
 		[Test]
 		public void GetHydratedDTO_SingleChoice_InEnum()
 		{
 			var dao = new RsapiDao(GetChoiceRsapiProvider(2, null));
-			var dto = dao.GetRelativityObject<GravityLevelOne>(RootArtifactID, Base.ObjectFieldsDepthLevel.FirstLevelOnly);
+			var dto = dao.GetRelativityObject<GravityLevelOne>(RootArtifactID, Base.ObjectFieldsDepthLevel.OnlyParentObject);
 			Assert.AreEqual(SingleChoiceFieldChoices.SingleChoice2, dto.SingleChoice);
 		}
 
@@ -68,14 +120,14 @@ namespace Gravity.Test.Unit
 		public void GetHydratedDTO_SingleChoice_NotInEnum()
 		{
 			var dao = new RsapiDao(GetChoiceRsapiProvider(5, null));
-			Assert.Throws<InvalidOperationException>(() => dao.GetRelativityObject<GravityLevelOne>(RootArtifactID, Base.ObjectFieldsDepthLevel.FirstLevelOnly));
+			Assert.Throws<InvalidOperationException>(() => dao.GetRelativityObject<GravityLevelOne>(RootArtifactID, Base.ObjectFieldsDepthLevel.OnlyParentObject));
 		}
 
 		[Test]
 		public void GetHydratedDTO_MultipleChoice_AllInEnum()
 		{
 			var dao = new RsapiDao(GetChoiceRsapiProvider(null, new[] { 11, 13 }));
-			var dto = dao.GetRelativityObject<GravityLevelOne>(RootArtifactID, Base.ObjectFieldsDepthLevel.FirstLevelOnly);
+			var dto = dao.GetRelativityObject<GravityLevelOne>(RootArtifactID, Base.ObjectFieldsDepthLevel.OnlyParentObject);
 			CollectionAssert.AreEquivalent(
 				new[] { MultipleChoiceFieldChoices.MultipleChoice1, MultipleChoiceFieldChoices.MultipleChoice3 },
 				dto.MultipleChoiceFieldChoices
@@ -87,7 +139,7 @@ namespace Gravity.Test.Unit
 		{
 			//first item is in an enum, but not in our enum
 			var dao = new RsapiDao(GetChoiceRsapiProvider(null, new[] { 3, 13 }));
-			Assert.Throws<InvalidOperationException>(() => dao.GetRelativityObject<GravityLevelOne>(RootArtifactID, Base.ObjectFieldsDepthLevel.FirstLevelOnly));
+			Assert.Throws<InvalidOperationException>(() => dao.GetRelativityObject<GravityLevelOne>(RootArtifactID, Base.ObjectFieldsDepthLevel.OnlyParentObject));
 
 		}
 
@@ -97,25 +149,15 @@ namespace Gravity.Test.Unit
 
 			// setup the RDO Read
 
-			var multipleGuid = typeof(GravityLevelOne)
-				.GetProperty(nameof(GravityLevelOne.MultipleChoiceFieldChoices))
-				.GetCustomAttribute<RelativityObjectFieldAttribute>()
-				.FieldGuid;
-
-			var singleGuid = typeof(GravityLevelOne)
-				.GetProperty(nameof(GravityLevelOne.SingleChoice))
-				.GetCustomAttribute<RelativityObjectFieldAttribute>()
-				.FieldGuid;
+			var multipleGuid = GetFieldGuid<GravityLevelOne>(nameof(GravityLevelOne.MultipleChoiceFieldChoices));
+			var singleGuid = GetFieldGuid<GravityLevelOne>(nameof(GravityLevelOne.SingleChoice));
 
 			var rdo = TestObjectHelper.GetStubRDO<GravityLevelOne>(RootArtifactID);
 			rdo[singleGuid].ValueAsSingleChoice = singleChoiceId == null ? null : new Choice(singleChoiceId.Value);
 			rdo[multipleGuid].ValueAsMultipleChoice = multipleChoiceIds?.Select(x => new Choice(x)).ToList() ?? new List<Choice>();
 
 			providerMock.Setup(x => x.ReadSingle(RootArtifactID)).Returns(rdo);
-
-			// setup the child object query
-			providerMock.Setup(x => x.Query(It.IsAny<Query<RDO>>())).Returns(new[] { new RDO[0].ToSuccessResultSet<QueryResultSet<RDO>>() });
-
+			
 			// setup the choice query
 
 			// results in ArtifactIDs 1, 2, 3
@@ -126,6 +168,14 @@ namespace Gravity.Test.Unit
 			providerMock.Setup(ChoiceCacheTests.SetupExpr(multiChoiceGuids)).Returns(ChoiceCacheTests.GetResults(multiChoiceGuids, 11));
 
 			return providerMock.Object;
+		}
+
+		private static Guid GetFieldGuid<T>(string fieldName) where T : BaseDto
+		{
+			return typeof(T)
+				.GetProperty(fieldName)
+				.GetCustomAttribute<RelativityObjectFieldAttribute>()
+				.FieldGuid;
 		}
 	}
 }
