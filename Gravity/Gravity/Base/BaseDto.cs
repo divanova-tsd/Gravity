@@ -169,8 +169,41 @@ namespace Gravity.Base
 			return null;
 		}
 
-		#endregion
+        public static Dictionary<PropertyInfo, RelativityObjectFieldAttribute> GetRelativityObjectFieldListInfos<T>()
+        {
+            var returnDictionary = new Dictionary<PropertyInfo, RelativityObjectFieldAttribute>();
+
+            foreach (var propertyInfo in typeof(T).GetPublicProperties())
+            {
+                var fieldAttribute = propertyInfo.GetCustomAttribute<RelativityObjectFieldAttribute>();
+                if (fieldAttribute != null)
+                {
+                    returnDictionary.Add(propertyInfo, fieldAttribute);
+                }
+            }
+
+            return returnDictionary;
+        }
+
+        public static Guid GetParentArtifactIdFieldGuid<T>()
+        {
+            Guid returnGuid = new Guid();
+
+            foreach (var propertyInfo in typeof(T).GetPublicProperties())
+            {
+                bool isPropertyAParentIdField = propertyInfo.GetCustomAttribute<RelativityObjectFieldParentArtifactIdAttribute>() != null;
+                if (isPropertyAParentIdField == true)
+                {
+                    returnGuid = propertyInfo.GetCustomAttribute<RelativityObjectFieldAttribute>().FieldGuid;
+                    break;
+                }
+            }
+
+            return returnGuid;
+        }
+
+        #endregion
 
 
-	}
+    }
 }

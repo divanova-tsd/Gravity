@@ -60,10 +60,14 @@
     <Compile Include="DAL\RSAPI\ChoiceCache.cs" />
     <Compile Include="DAL\RSAPI\IRsapiProvider.cs" />
     <Compile Include="DAL\RSAPI\RsapiProvider.cs" />
+    <Compile Include="DAL\SQL\DBContextProvider.cs" />
+    <Compile Include="DAL\SQL\SqlDao.cs" />
+    <Compile Include="DAL\SQL\SqlDao.Get.cs" />
     <Compile Include="Extensions\CollectionsExtensions.cs" />
     <Compile Include="Extensions\ResultSetExtensions.cs" />
     <Compile Include="Extensions\EnumHelpers.cs" />
     <Compile Include="Extensions\TupleHelpers.cs" />
+    <Compile Include="Globals\SQLConstants.cs" />
     <Compile Include="Utils\InvokeWithRetrySettings.cs" />
     <Compile Include="Utils\InvokeWithRetryService.cs" />
     <Compile Include="Base\BaseDto.cs" />

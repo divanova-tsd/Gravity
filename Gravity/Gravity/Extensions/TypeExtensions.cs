@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -42,5 +43,16 @@ namespace Gravity.Extensions
 				.Select(p => new Tuple<PropertyInfo, A>(p, p.GetCustomAttribute<A>()))
 				.Where(kvp => kvp.Item2 != null);
 		}
-	}
+
+        public static IList MakeGenericList(this Type type, IEnumerable items)
+        {
+            var listType = typeof(List<>).MakeGenericType(type);
+            IList returnList = (IList)Activator.CreateInstance(listType);
+            foreach (var item in items)
+            {
+                returnList.Add(item);
+            }
+            return returnList;
+        }
+    }
 }

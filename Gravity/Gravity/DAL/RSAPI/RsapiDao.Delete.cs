@@ -50,7 +50,7 @@ namespace Gravity.DAL.RSAPI
 
 		public void DeleteRelativityObjectRecusively<T>(int objectToDeleteId) where T : BaseDto, new()
 		{
-			T theObjectToDelete = GetRelativityObject<T>(objectToDeleteId, Base.ObjectFieldsDepthLevel.FullyRecursive);
+			T theObjectToDelete = GetRelativityObject<T>(objectToDeleteId, ObjectFieldsDepthLevel.FullyRecursive);
 			DeleteRelativityObjectRecusively(theObjectToDelete);
 		}
 
